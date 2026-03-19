@@ -3,17 +3,19 @@
 // Design: Mobile-first, bottom tab navigation, card-based UI
 // Simulates a phone screen within the browser
 // ============================================================
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Shield, Home, Bot, AlertTriangle, ClipboardList, User,
   Bell, MapPin, Zap, CheckCircle2, Phone, Radio, Camera,
   ChevronRight, ArrowLeft, Clock, Activity, Navigation,
-  MessageSquare, Settings, LogOut
+  MessageSquare, Settings, LogOut, Crosshair, Loader2,
+  Wifi, WifiOff, CheckCheck, X, LocateFixed, Signal
 } from 'lucide-react';
 import {
   robots, tasks, alerts, guardShifts,
-  getRobotStatusLabel, getTaskStatusLabel, getAlertLevelLabel
+  getRobotStatusLabel, getTaskStatusLabel, getAlertLevelLabel,
+  type Robot
 } from '@/lib/mockData';
 import { toast } from 'sonner';
 
@@ -25,6 +27,368 @@ const tabs = [
   { id: 'alerts', icon: AlertTriangle, label: '告警' },
   { id: 'me', icon: User, label: '我的' },
 ];
+
+// ---- 计算两点距离（模拟坐标系）----
+function calcDistance(ax: number, ay: number, bx: number, by: number) {
+  return Math.sqrt((ax - bx) ** 2 + (ay - by) ** 2);
+}
+
+// ---- 呼叫状态类型 ----
+type CallState =
+  | 'idle'
+  | 'locating'     // 正在获取当前位置
+  | 'matching'     // 正在匹配最近机器人
+  | 'calling'      // 正在呼叫
+  | 'dispatched'   // 已派遣，机器人前往中
+  | 'arrived'      // 机器人已到达
+  | 'failed';      // 呼叫失败
+
+// ---- 一键呼叫最近机器人组件 ----
+function CallNearestRobotPanel() {
+  const [callState, setCallState] = useState<CallState>('idle');
+  const [nearestRobot, setNearestRobot] = useState<Robot | null>(null);
+  const [eta, setEta] = useState(0);
+  const [countdown, setCountdown] = useState(0);
+  const [userLocation] = useState({ x: 28, y: 55, name: 'A栋一楼走廊' }); // 模拟保安当前位置
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // 清理计时器
+  useEffect(() => {
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, []);
+
+  // 当 dispatched 后开始倒计时
+  useEffect(() => {
+    if (callState === 'dispatched' && countdown > 0) {
+      timerRef.current = setInterval(() => {
+        setCountdown(c => {
+          if (c <= 1) {
+            clearInterval(timerRef.current!);
+            setCallState('arrived');
+            return 0;
+          }
+          return c - 1;
+        });
+      }, 1000);
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [callState, countdown]);
+
+  const handleCall = async () => {
+    if (callState !== 'idle' && callState !== 'failed') return;
+
+    // Step 1: 定位
+    setCallState('locating');
+    setNearestRobot(null);
+    await new Promise(r => setTimeout(r, 1200));
+
+    // Step 2: 匹配最近可用机器人
+    setCallState('matching');
+    await new Promise(r => setTimeout(r, 900));
+
+    const available = robots.filter(r =>
+      r.status === 'online' || r.status === 'patrolling'
+    );
+    if (available.length === 0) {
+      setCallState('failed');
+      toast.error('呼叫失败', { description: '当前无可用机器人，请联系指挥中心' });
+      return;
+    }
+
+    const nearest = available.reduce((prev, cur) => {
+      const dPrev = calcDistance(userLocation.x, userLocation.y, prev.x, prev.y);
+      const dCur = calcDistance(userLocation.x, userLocation.y, cur.x, cur.y);
+      return dCur < dPrev ? cur : prev;
+    });
+
+    const dist = calcDistance(userLocation.x, userLocation.y, nearest.x, nearest.y);
+    const estimatedEta = Math.max(1, Math.round(dist / 8)); // 模拟速度换算为分钟
+
+    setNearestRobot(nearest);
+
+    // Step 3: 发出呼叫
+    setCallState('calling');
+    await new Promise(r => setTimeout(r, 1000));
+
+    // Step 4: 已派遣
+    setEta(estimatedEta);
+    setCountdown(estimatedEta * 10); // 演示用：每秒=10秒，加速体验
+    setCallState('dispatched');
+    toast.success(`${nearest.name} 已出发`, {
+      description: `预计 ${estimatedEta} 分钟后到达 ${userLocation.name}`,
+    });
+  };
+
+  const handleCancel = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    setCallState('idle');
+    setNearestRobot(null);
+    toast.info('已取消呼叫');
+  };
+
+  // ---- 状态配置 ----
+  const stateConfig: Record<CallState, {
+    label: string;
+    subLabel: string;
+    btnLabel: string;
+    btnColor: string;
+    icon: React.ReactNode;
+    showCancel: boolean;
+  }> = {
+    idle: {
+      label: '一键呼叫最近机器人',
+      subLabel: `当前位置：${userLocation.name}`,
+      btnLabel: '立即呼叫',
+      btnColor: 'from-sky-500 to-sky-600',
+      icon: <Radio size={22} className="text-white" />,
+      showCancel: false,
+    },
+    locating: {
+      label: '正在获取当前位置…',
+      subLabel: 'GPS 定位中',
+      btnLabel: '定位中…',
+      btnColor: 'from-slate-600 to-slate-700',
+      icon: <LocateFixed size={22} className="text-sky-400 animate-pulse" />,
+      showCancel: false,
+    },
+    matching: {
+      label: '正在匹配最近机器人…',
+      subLabel: 'RMF 调度引擎计算中',
+      btnLabel: '匹配中…',
+      btnColor: 'from-slate-600 to-slate-700',
+      icon: <Loader2 size={22} className="text-violet-400 animate-spin" />,
+      showCancel: false,
+    },
+    calling: {
+      label: `正在呼叫 ${nearestRobot?.name ?? ''}…`,
+      subLabel: '等待机器人响应',
+      btnLabel: '呼叫中…',
+      btnColor: 'from-amber-500 to-amber-600',
+      icon: <Signal size={22} className="text-amber-400 animate-pulse" />,
+      showCancel: false,
+    },
+    dispatched: {
+      label: `${nearestRobot?.name ?? ''} 正在赶来`,
+      subLabel: `预计 ${eta} 分钟后到达 · ${nearestRobot?.location ?? ''}`,
+      btnLabel: '取消呼叫',
+      btnColor: 'from-red-600 to-red-700',
+      icon: <Bot size={22} className="text-emerald-400" />,
+      showCancel: true,
+    },
+    arrived: {
+      label: `${nearestRobot?.name ?? ''} 已到达！`,
+      subLabel: `已抵达 ${userLocation.name}`,
+      btnLabel: '完成',
+      btnColor: 'from-emerald-500 to-emerald-600',
+      icon: <CheckCheck size={22} className="text-white" />,
+      showCancel: false,
+    },
+    failed: {
+      label: '呼叫失败',
+      subLabel: '无可用机器人，请联系指挥中心',
+      btnLabel: '重新呼叫',
+      btnColor: 'from-sky-500 to-sky-600',
+      icon: <WifiOff size={22} className="text-red-400" />,
+      showCancel: false,
+    },
+  };
+
+  const cfg = stateConfig[callState];
+  const isLoading = callState === 'locating' || callState === 'matching' || callState === 'calling';
+  const isDispatched = callState === 'dispatched';
+  const isArrived = callState === 'arrived';
+
+  return (
+    <div
+      className="rounded-2xl overflow-hidden border"
+      style={{
+        background: 'linear-gradient(145deg, oklch(0.16 0.03 230), oklch(0.13 0.025 240))',
+        borderColor: isArrived
+          ? 'rgba(52,211,153,0.35)'
+          : isDispatched
+          ? 'rgba(56,189,248,0.3)'
+          : 'rgba(56,189,248,0.15)',
+        boxShadow: isArrived
+          ? '0 0 24px rgba(52,211,153,0.15)'
+          : isDispatched
+          ? '0 0 20px rgba(56,189,248,0.1)'
+          : 'none',
+      }}
+    >
+      {/* Header */}
+      <div className="px-4 pt-4 pb-3 flex items-center gap-3 border-b border-white/8">
+        <div
+          className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+          style={{
+            background: isArrived
+              ? 'rgba(52,211,153,0.15)'
+              : isDispatched
+              ? 'rgba(56,189,248,0.15)'
+              : 'rgba(56,189,248,0.1)',
+            border: isArrived
+              ? '1px solid rgba(52,211,153,0.3)'
+              : '1px solid rgba(56,189,248,0.2)',
+          }}
+        >
+          {cfg.icon}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-semibold text-slate-100 font-display leading-tight">{cfg.label}</div>
+          <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
+            <MapPin size={9} />
+            <span className="truncate">{cfg.subLabel}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Progress steps */}
+      <div className="px-4 py-3">
+        <div className="flex items-center gap-0">
+          {(['locating', 'matching', 'calling', 'dispatched', 'arrived'] as CallState[]).map((step, i, arr) => {
+            const stepOrder: Record<CallState, number> = {
+              idle: -1, locating: 0, matching: 1, calling: 2, dispatched: 3, arrived: 4, failed: -1,
+            };
+            const currentOrder = stepOrder[callState];
+            const stepO = stepOrder[step];
+            const done = currentOrder > stepO;
+            const active = currentOrder === stepO;
+            const stepLabels: Record<string, string> = {
+              locating: '定位', matching: '匹配', calling: '呼叫', dispatched: '派遣', arrived: '到达',
+            };
+            return (
+              <div key={step} className="flex items-center flex-1">
+                <div className="flex flex-col items-center gap-1 flex-1">
+                  <div
+                    className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300"
+                    style={{
+                      background: done
+                        ? 'rgba(52,211,153,0.2)'
+                        : active
+                        ? 'rgba(56,189,248,0.25)'
+                        : 'rgba(255,255,255,0.05)',
+                      border: done
+                        ? '1px solid rgba(52,211,153,0.5)'
+                        : active
+                        ? '1px solid rgba(56,189,248,0.5)'
+                        : '1px solid rgba(255,255,255,0.08)',
+                      color: done ? '#34d399' : active ? '#38bdf8' : '#475569',
+                    }}
+                  >
+                    {done ? <CheckCheck size={10} /> : active && isLoading ? <Loader2 size={10} className="animate-spin" /> : i + 1}
+                  </div>
+                  <span className="text-xs" style={{ color: done ? '#34d399' : active ? '#38bdf8' : '#475569' }}>
+                    {stepLabels[step]}
+                  </span>
+                </div>
+                {i < arr.length - 1 && (
+                  <div
+                    className="h-px flex-1 mx-1 mb-4 transition-all duration-500"
+                    style={{
+                      background: done ? 'rgba(52,211,153,0.4)' : 'rgba(255,255,255,0.06)',
+                    }}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Dispatched: robot info + ETA countdown */}
+      <AnimatePresence>
+        {(isDispatched || isArrived) && nearestRobot && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="mx-4 mb-3 rounded-xl border border-white/8 overflow-hidden"
+            style={{ background: 'oklch(0.145 0.022 240)' }}
+          >
+            <div className="p-3 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-sky-500/15 border border-sky-500/25 flex items-center justify-center shrink-0">
+                <Bot size={16} className="text-sky-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-slate-200">{nearestRobot.name}</div>
+                <div className="text-xs text-slate-500 font-mono-data">{nearestRobot.id} · {nearestRobot.model}</div>
+              </div>
+              <div className="text-right">
+                {isArrived ? (
+                  <div className="flex items-center gap-1 text-emerald-400">
+                    <CheckCircle2 size={14} />
+                    <span className="text-xs font-medium">已到达</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-lg font-bold text-sky-400 font-mono-data leading-none">
+                      {Math.ceil(countdown / 10)}
+                    </div>
+                    <div className="text-xs text-slate-500">分钟</div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* ETA progress bar */}
+            {isDispatched && (
+              <div className="px-3 pb-3">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-slate-500">预计到达进度</span>
+                  <span className="text-xs text-sky-400 font-mono-data">
+                    {Math.round(((eta * 10 - countdown) / (eta * 10)) * 100)}%
+                  </span>
+                </div>
+                <div className="h-1.5 rounded-full bg-white/8 overflow-hidden">
+                  <motion.div
+                    className="h-full rounded-full bg-sky-500"
+                    animate={{ width: `${((eta * 10 - countdown) / (eta * 10)) * 100}%` }}
+                    transition={{ duration: 0.5 }}
+                  />
+                </div>
+                <div className="flex items-center justify-between mt-1.5">
+                  <span className="text-xs text-slate-600 flex items-center gap-1">
+                    <MapPin size={8} />
+                    出发：{nearestRobot.location}
+                  </span>
+                  <span className="text-xs text-slate-600 flex items-center gap-1">
+                    <MapPin size={8} />
+                    目标：{userLocation.name}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Arrived animation */}
+            {isArrived && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="px-3 pb-3 flex items-center gap-2"
+              >
+                <div className="flex-1 h-1.5 rounded-full bg-emerald-500/30 overflow-hidden">
+                  <div className="h-full w-full rounded-full bg-emerald-500" />
+                </div>
+              </motion.div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Action button */}
+      <div className="px-4 pb-4 flex gap-2">
+        <motion.button
+          whileTap={{ scale: 0.97 }}
+          onClick={isDispatched ? handleCancel : isArrived ? () => setCallState('idle') : handleCall}
+          disabled={isLoading}
+          className={`flex-1 py-3 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 transition-all bg-gradient-to-r ${cfg.btnColor} ${isLoading ? 'opacity-60 cursor-not-allowed' : 'active:brightness-90'}`}
+        >
+          {isLoading && <Loader2 size={15} className="animate-spin" />}
+          {cfg.btnLabel}
+        </motion.button>
+      </div>
+    </div>
+  );
+}
 
 // ---- Home Tab ----
 function HomeTab() {
@@ -206,7 +570,21 @@ function TasksTab() {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">当前任务</div>
+      {/* ===== 一键呼叫最近机器人 ===== */}
+      <div className="text-xs text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+        <Radio size={11} className="text-sky-400" />
+        快速呼叫
+      </div>
+      <CallNearestRobotPanel />
+
+      {/* 分隔 */}
+      <div className="flex items-center gap-3 my-1">
+        <div className="flex-1 h-px bg-white/6" />
+        <span className="text-xs text-slate-600">当前任务</span>
+        <div className="flex-1 h-px bg-white/6" />
+      </div>
+
+      {/* 任务列表 */}
       {myTasks.map(task => (
         <motion.div
           key={task.id}
