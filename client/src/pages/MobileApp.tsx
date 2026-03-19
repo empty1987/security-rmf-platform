@@ -3,7 +3,7 @@
 // Design: Mobile-first, bottom tab navigation, card-based UI
 // Simulates a phone screen within the browser
 // ============================================================
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Shield, Home, Bot, AlertTriangle, ClipboardList, User,
@@ -12,6 +12,7 @@ import {
   MessageSquare, Settings, LogOut, Crosshair, Loader2,
   Wifi, WifiOff, CheckCheck, X, LocateFixed, Signal
 } from 'lucide-react';
+import RobotLiveView from './RobotLiveView';
 import {
   robots, tasks, alerts, guardShifts,
   getRobotStatusLabel, getTaskStatusLabel, getAlertLevelLabel,
@@ -391,7 +392,7 @@ function CallNearestRobotPanel() {
 }
 
 // ---- Home Tab ----
-function HomeTab() {
+function HomeTab({ onOpenLiveView }: { onOpenLiveView: () => void }) {
   const [currentTime, setCurrentTime] = useState(new Date());
   useEffect(() => {
     const t = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -443,14 +444,25 @@ function HomeTab() {
       {/* Quick stats */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: '在线机器人', value: 5, icon: <Bot size={16} className="text-sky-400" />, color: 'text-sky-400' },
-          { label: '未处理告警', value: unreadAlerts.length, icon: <AlertTriangle size={16} className="text-red-400" />, color: 'text-red-400' },
-          { label: '执行中任务', value: activeTasks.length, icon: <Activity size={16} className="text-emerald-400" />, color: 'text-emerald-400' },
+          { label: '在线机器人', value: 5, icon: <Bot size={16} className="text-sky-400" />, color: 'text-sky-400', clickable: true },
+          // @ts-ignore
+          { label: '未处理告警', value: unreadAlerts.length, icon: <AlertTriangle size={16} className="text-red-400" />, color: 'text-red-400', clickable: false },
+          { label: '执行中任务', value: activeTasks.length, icon: <Activity size={16} className="text-emerald-400" />, color: 'text-emerald-400', clickable: false },
         ].map(item => (
-          <div key={item.label} className="rounded-xl p-3 border border-white/8 text-center" style={{ background: 'oklch(0.155 0.025 240)' }}>
+          <div
+            key={item.label}
+            className={`rounded-xl p-3 border border-white/8 text-center transition-all ${
+              (item as any).clickable ? 'cursor-pointer active:scale-95 hover:border-sky-500/40 hover:bg-sky-500/5' : ''
+            }`}
+            style={{ background: 'oklch(0.155 0.025 240)' }}
+            onClick={(item as any).clickable ? onOpenLiveView : undefined}
+          >
             <div className="flex justify-center mb-1.5">{item.icon}</div>
             <div className={`text-xl font-bold font-display ${item.color}`}>{item.value}</div>
-            <div className="text-xs text-slate-500 mt-0.5">{item.label}</div>
+            <div className="text-xs text-slate-500 mt-0.5 flex items-center justify-center gap-0.5">
+              {item.label}
+              {(item as any).clickable && <ChevronRight size={9} className="text-sky-500/60" />}
+            </div>
           </div>
         ))}
       </div>
@@ -796,10 +808,14 @@ function MeTab() {
 // ---- Main Mobile App ----
 export default function MobileApp() {
   const [activeTab, setActiveTab] = useState('home');
+  const [showLiveView, setShowLiveView] = useState(false);
   const unreadAlerts = alerts.filter(a => !a.acknowledged).length;
 
+  const openLiveView = useCallback(() => setShowLiveView(true), []);
+  const closeLiveView = useCallback(() => setShowLiveView(false), []);
+
   const tabContent: Record<string, React.ReactNode> = {
-    home: <HomeTab />,
+    home: <HomeTab onOpenLiveView={openLiveView} />,
     robots: <RobotsTab />,
     tasks: <TasksTab />,
     alerts: <AlertsTab />,
@@ -842,7 +858,9 @@ export default function MobileApp() {
 
         {/* App header */}
         <div className="px-5 pb-3 flex items-center justify-between border-b border-white/8">
-          <h1 className="text-base font-bold text-white font-display">{tabTitles[activeTab]}</h1>
+          <h1 className="text-base font-bold text-white font-display">
+            {showLiveView ? '实时画面' : tabTitles[activeTab]}
+          </h1>
           <div className="relative">
             <button className="w-8 h-8 rounded-xl bg-white/5 border border-white/8 flex items-center justify-center text-slate-400">
               <Bell size={15} />
@@ -858,15 +876,28 @@ export default function MobileApp() {
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-4 py-4" style={{ maxHeight: '620px' }}>
           <AnimatePresence mode="wait">
-            <motion.div
-              key={activeTab}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-            >
-              {tabContent[activeTab]}
-            </motion.div>
+            {showLiveView ? (
+              <motion.div
+                key="liveview"
+                initial={{ opacity: 0, x: 40 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 40 }}
+                transition={{ duration: 0.25 }}
+                className="h-full"
+              >
+                <RobotLiveView onBack={closeLiveView} />
+              </motion.div>
+            ) : (
+              <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+              >
+                {tabContent[activeTab]}
+              </motion.div>
+            )}
           </AnimatePresence>
         </div>
 
