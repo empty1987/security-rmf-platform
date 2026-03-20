@@ -8,16 +8,19 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Shield, Bot, AlertTriangle, CheckCircle2, Activity,
   Zap, MapPin, Clock, ChevronRight, Bell, Radio,
-  TrendingUp, Users, Eye
+  TrendingUp, Users, Eye, Siren, BookOpen, Play,
+  Camera, Link as LinkIcon
 } from 'lucide-react';
+import { Link } from 'wouter';
 import CampusMap from '@/components/CampusMap';
 import {
-  robots, tasks, alerts, statistics,
+  robots, tasks, alerts, statistics, incidents, presets,
   getRobotStatusLabel, getAlertLevelLabel,
   type Robot, type Alert
 } from '@/lib/mockData';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { hourlyStats } from '@/lib/mockData';
+import { toast } from 'sonner';
 
 const statusBg: Record<string, string> = {
   online: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
@@ -335,36 +338,56 @@ export default function CommandCenter() {
             ))}
           </div>
 
-          {/* Active tasks */}
+          {/* 待处置事件 */}
           <div className="border-t border-white/8 p-3">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">执行中任务</span>
-              <span className="text-xs text-sky-400">{activeTasks.length} 项</span>
+              <span className="text-xs font-medium text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                <Siren size={11} className="text-red-400" />待处置事件
+              </span>
+              <span className={`text-xs px-1.5 py-0.5 rounded ${incidents.filter(i=>i.status!=='closed').length > 0 ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                {incidents.filter(i=>i.status!=='closed').length} 件
+              </span>
             </div>
-            <div className="flex flex-col gap-2">
-              {activeTasks.slice(0, 3).map(task => (
-                <div key={task.id} className="rounded-lg p-2.5 border border-white/5 bg-white/3">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs text-slate-200 truncate flex-1">{task.title}</span>
-                    <span className="text-xs font-mono-data text-sky-400 ml-2">{task.progress}%</span>
-                  </div>
-                  <div className="h-1 rounded-full bg-white/10 overflow-hidden">
-                    <motion.div
-                      className="h-full rounded-full bg-sky-500"
-                      initial={{ width: 0 }}
-                      animate={{ width: `${task.progress}%` }}
-                      transition={{ duration: 0.8, ease: 'easeOut' }}
-                    />
-                  </div>
-                  {task.assignedRobot && (
-                    <div className="flex items-center gap-1 mt-1.5">
-                      <Bot size={9} className="text-slate-500" />
-                      <span className="text-xs text-slate-500 font-mono-data">{task.assignedRobot}</span>
-                      <ChevronRight size={9} className="text-slate-600" />
-                      <span className="text-xs text-slate-500 truncate">{task.location}</span>
+            <div className="flex flex-col gap-1.5">
+              {incidents.filter(i=>i.status!=='closed').slice(0,3).map(incident => {
+                const lvColor = incident.level === 'urgent' ? 'border-l-red-500 text-red-400' : incident.level === 'important' ? 'border-l-amber-500 text-amber-400' : 'border-l-sky-500 text-sky-400';
+                return (
+                  <div key={incident.id} className={`rounded-lg p-2.5 border-l-2 bg-white/3 ${lvColor}`}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-slate-200 truncate flex-1">{incident.title}</span>
+                      <span className="text-xs ml-2 shrink-0" style={{color:'inherit'}}>{incident.level === 'urgent' ? '紧急' : incident.level === 'important' ? '重要' : '一般'}</span>
                     </div>
-                  )}
-                </div>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <MapPin size={9} className="text-slate-500" />
+                      <span className="text-xs text-slate-500 truncate">{incident.location}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 快速启动预案 */}
+          <div className="border-t border-white/8 p-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                <BookOpen size={11} />快速预案
+              </span>
+              <Link href="/admin/presets">
+                <span className="text-xs text-sky-400 hover:text-sky-300 cursor-pointer">全部</span>
+              </Link>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              {presets.filter(p=>p.isDefault).slice(0,3).map(preset => (
+                <button
+                  key={preset.id}
+                  onClick={() => toast.success(`预案已启动`, { description: preset.name })}
+                  className="flex items-center gap-2 p-2.5 rounded-lg border border-white/5 bg-white/3 hover:border-sky-500/30 hover:bg-sky-500/5 transition-all text-left w-full"
+                >
+                  <Play size={11} className="text-sky-400 shrink-0" />
+                  <span className="text-xs text-slate-200 flex-1 truncate">{preset.name}</span>
+                  <span className="text-xs text-slate-500 shrink-0">{preset.robotCount}台</span>
+                </button>
               ))}
             </div>
           </div>

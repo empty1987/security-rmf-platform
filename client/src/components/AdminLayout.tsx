@@ -7,15 +7,17 @@ import { Link, useLocation } from 'wouter';
 import {
   Shield, LayoutDashboard, Bot, ClipboardList, AlertTriangle,
   MapPin, Users, Settings, ChevronRight, Bell, LogOut,
-  Monitor, Smartphone, Activity, Menu, X
+  Monitor, Smartphone, Activity, Menu, X, Camera, BookOpen
 } from 'lucide-react';
 import { alerts } from '@/lib/mockData';
 
 const navItems = [
   { path: '/admin', icon: LayoutDashboard, label: '总览', exact: true },
+  { path: '/admin/video', icon: Camera, label: '视频监控' },
+  { path: '/admin/presets', icon: BookOpen, label: '任务预案' },
   { path: '/admin/robots', icon: Bot, label: '机器人管理' },
-  { path: '/admin/tasks', icon: ClipboardList, label: '任务调度' },
   { path: '/admin/alerts', icon: AlertTriangle, label: '告警中心' },
+  { path: '/admin/tasks', icon: ClipboardList, label: '任务调度' },
   { path: '/admin/patrol', icon: MapPin, label: '巡逻路线' },
   { path: '/admin/visitors', icon: Users, label: '访客管理' },
   { path: '/admin/guards', icon: Shield, label: '保安排班' },

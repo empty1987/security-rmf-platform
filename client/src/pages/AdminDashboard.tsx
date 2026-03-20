@@ -109,7 +109,7 @@ export default function AdminDashboard() {
           icon={<Users size={18} />}
           label="在场访客"
           value={statistics.activeVisitors}
-          sub={`今日共 ${statistics.visitorsToday} 人`}
+          sub={`今日共 ${statistics.todayVisitors} 人`}
           color="violet"
         />
       </div>
@@ -151,7 +151,7 @@ export default function AdminDashboard() {
                 paddingAngle={3}
                 dataKey="value"
               >
-                {taskDistribution.map((entry, index) => (
+                {taskDistribution.map((entry: { name: string; value: number; color: string }, index: number) => (
                   <Cell key={index} fill={entry.color} />
                 ))}
               </Pie>
@@ -161,7 +161,7 @@ export default function AdminDashboard() {
             </PieChart>
           </ResponsiveContainer>
           <div className="flex flex-col gap-1 mt-1">
-            {taskDistribution.map(item => (
+            {taskDistribution.map((item: { name: string; value: number; color: string }) => (
               <div key={item.name} className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-1.5">
                   <div className="w-2 h-2 rounded-full" style={{ background: item.color }} />
@@ -282,17 +282,17 @@ export default function AdminDashboard() {
               <h3 className="text-sm font-semibold text-slate-200 font-display">值班保安</h3>
             </div>
             <div className="p-3 flex flex-col gap-2">
-              {guardShifts.filter(g => g.status === 'active' || g.status === 'break').map(guard => (
+              {guardShifts.filter(g => g.status === 'on-duty' || g.status === 'break').map(guard => (
                 <div key={guard.id} className="flex items-center gap-3">
                   <div className="w-7 h-7 rounded-lg bg-sky-500/20 border border-sky-500/30 flex items-center justify-center text-xs font-bold text-sky-400 font-display shrink-0">
-                    {guard.avatar}
+                    {guard.guardName.slice(0, 1)}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-xs text-slate-200">{guard.guardName}</div>
-                    <div className="text-xs text-slate-500">{guard.zone}</div>
+                    <div className="text-xs text-slate-500">{guard.zone ?? guard.area}</div>
                   </div>
-                  <span className={`text-xs px-1.5 py-0.5 rounded border ${guard.status === 'active' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25' : 'bg-amber-500/15 text-amber-400 border-amber-500/25'}`}>
-                    {guard.status === 'active' ? '值班中' : '休息'}
+                  <span className={`text-xs px-1.5 py-0.5 rounded border ${guard.status === 'on-duty' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25' : 'bg-amber-500/15 text-amber-400 border-amber-500/25'}`}>
+                    {guard.status === 'on-duty' ? '値班中' : '休息'}
                   </span>
                 </div>
               ))}

@@ -21,6 +21,8 @@ import VisitorManagement from "./pages/VisitorManagement";
 import GuardSchedule from "./pages/GuardSchedule";
 import SystemSettings from "./pages/SystemSettings";
 import MobileApp from "./pages/MobileApp";
+import VideoMonitor from "./pages/VideoMonitor";
+import PresetPlans from "./pages/PresetPlans";
 
 function Router() {
   return (
@@ -40,6 +42,8 @@ function Router() {
       <Route path="/admin/visitors" component={VisitorManagement} />
       <Route path="/admin/guards" component={GuardSchedule} />
       <Route path="/admin/settings" component={SystemSettings} />
+      <Route path="/admin/video" component={VideoMonitor} />
+      <Route path="/admin/presets" component={PresetPlans} />
 
       {/* Mobile App — 移动端 */}
       <Route path="/mobile" component={MobileApp} />
