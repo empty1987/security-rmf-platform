@@ -20,7 +20,7 @@ import PatrolRoutes from "./pages/PatrolRoutes";
 import VisitorManagement from "./pages/VisitorManagement";
 import GuardSchedule from "./pages/GuardSchedule";
 import SystemSettings from "./pages/SystemSettings";
-import MobileApp from "./pages/MobileApp";
+import VueMobileWrapper from "./pages/VueMobileWrapper";
 import VideoMonitor from "./pages/VideoMonitor";
 import PresetPlans from "./pages/PresetPlans";
 
@@ -45,8 +45,8 @@ function Router() {
       <Route path="/admin/video" component={VideoMonitor} />
       <Route path="/admin/presets" component={PresetPlans} />
 
-      {/* Mobile App — 移动端 */}
-      <Route path="/mobile" component={MobileApp} />
+      {/* Mobile App — 移动端（Vue 3 SFC） */}
+      <Route path="/mobile" component={VueMobileWrapper} />
 
       {/* Fallback */}
       <Route path="/404" component={NotFound} />
