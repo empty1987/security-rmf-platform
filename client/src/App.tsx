@@ -23,6 +23,7 @@ import SystemSettings from "./pages/SystemSettings";
 import VueMobileWrapper from "./pages/VueMobileWrapper";
 import VideoMonitor from "./pages/VideoMonitor";
 import PresetPlans from "./pages/PresetPlans";
+import MiniappPreview from "./miniapp/MiniappPreview";
 
 function Router() {
   return (
@@ -47,6 +48,9 @@ function Router() {
 
       {/* Mobile App — 移动端（Vue 3 SFC） */}
       <Route path="/mobile" component={VueMobileWrapper} />
+
+      {/* Miniapp Preview — 小程序预览 */}
+      <Route path="/miniapp" component={MiniappPreview} />
 
       {/* Fallback */}
       <Route path="/404" component={NotFound} />
