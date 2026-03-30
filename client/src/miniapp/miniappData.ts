@@ -19,7 +19,7 @@ export interface Incident {
 export interface Task {
   id: string; title: string;
   type: 'patrol' | 'inspection' | 'guide' | 'response';
-  status: 'running' | 'pending' | 'completed';
+  status: 'running' | 'pending' | 'completed' | 'cancelled';
   priority: 'urgent' | 'high' | 'medium' | 'low';
   progress: number; location: string; assignedRobot: string;
   startTime: string; endTime: string; description: string;
@@ -96,7 +96,7 @@ export const getRobotStatusClass = (s: string) => ({ patrolling: 'sky', respondi
 export const getBatteryClass = (b: number) => b > 50 ? 'high' : b > 20 ? 'mid' : 'low';
 export const getIncidentLevelLabel = (l: string) => ({ urgent: '紧急', important: '重要', normal: '一般' }[l] || l);
 export const getIncidentStatusLabel = (s: string) => ({ open: '待处置', handling: '处置中', closed: '已关闭' }[s] || s);
-export const getTaskStatusLabel = (s: string) => ({ running: '进行中', pending: '待开始', completed: '已完成' }[s] || s);
+export const getTaskStatusLabel = (s: string) => ({ running: '进行中', pending: '待开始', completed: '已完成', cancelled: '已取消' }[s] || s);
 export const getTaskPriorityLabel = (p: string) => ({ urgent: '紧急', high: '重要', medium: '普通', low: '低优先' }[p] || p);
 export const getTaskPriorityClass = (p: string) => ({ urgent: 'urgent', high: 'important', medium: 'normal', low: 'success' }[p] || 'normal');
 export const TYPE_ICON: Record<string, string> = { patrol: '🔄', inspection: '🔍', guide: '👋', response: '🚨' };
