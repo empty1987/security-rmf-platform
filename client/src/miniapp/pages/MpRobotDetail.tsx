@@ -344,6 +344,13 @@ export default function MpRobotDetail({ robotId, navigate, goBack }: Props) {
   const [selectedPatrolId, setSelectedPatrolId] = useState('');
   const [editPatrol, setEditPatrol] = useState({ location: '', speed: 'normal', loops: 1 });
   const [toast, setToast] = useState('');
+  // 语音播报状态
+  const [showVoicePanel, setShowVoicePanel] = useState(false);
+  const [voiceText, setVoiceText] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [voiceLog, setVoiceLog] = useState<{text: string; time: string}[]>([]);
+  const recognitionRef = useRef<any>(null);
+  const recordTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const sc = getRobotStatusClass(robot.status);
   const statusColor = STATUS_COLOR[sc] || '#38bdf8';
@@ -353,8 +360,46 @@ export default function MpRobotDetail({ robotId, navigate, goBack }: Props) {
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 2500); };
 
   const handleQuickOp = (key: string) => {
-    const msgs: Record<string, string> = { stop: '✅ 已发送停止指令', restart: '🔁 已重启当前任务', charge: '⚡ 已指令返回充电桩', photo: '📸 拍照上报成功', alarm: '🔔 警报已触发', voice: '📢 语音播报已启动' };
+    if (key === 'voice') { setShowVoicePanel(true); return; }
+    const msgs: Record<string, string> = { stop: '✅ 已发送停止指令', restart: '🔁 已重启当前任务', charge: '⚡ 已指令返回充电桩', photo: '📸 拍照上报成功', alarm: '🔔 警报已触发' };
     showToast(msgs[key] || '✅ 指令已发送');
+  };
+  // 发送语音播报
+  const sendVoice = (text: string) => {
+    if (!text.trim()) return;
+    const now = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    setVoiceLog(prev => [{ text: text.trim(), time: now }, ...prev].slice(0, 5));
+    showToast(`📢 ${robot.name} 播报中：${text.trim().slice(0, 12)}${text.trim().length > 12 ? '…' : ''}`);
+    setVoiceText('');
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utt = new SpeechSynthesisUtterance(text.trim());
+      utt.lang = 'zh-CN'; utt.rate = 0.9; utt.pitch = 1.1;
+      window.speechSynthesis.speak(utt);
+    }
+  };
+  // 开始语音识别
+  const startRecording = () => {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) { showToast('⚠️ 当前浏览器不支持语音输入'); return; }
+    setIsRecording(true);
+    const rec = new SR();
+    rec.lang = 'zh-CN'; rec.continuous = false; rec.interimResults = true;
+    rec.onresult = (e: any) => {
+      const t = Array.from(e.results).map((r: any) => r[0].transcript).join('');
+      setVoiceText(t);
+    };
+    rec.onerror = () => { setIsRecording(false); showToast('⚠️ 语音识别失败'); };
+    rec.onend = () => setIsRecording(false);
+    rec.start();
+    recognitionRef.current = rec;
+    recordTimerRef.current = setTimeout(() => stopRecording(), 10000);
+  };
+  const stopRecording = () => {
+    if (recordTimerRef.current) { clearTimeout(recordTimerRef.current); recordTimerRef.current = null; }
+    try { recognitionRef.current?.stop(); } catch(_) {}
+    recognitionRef.current = null;
+    setIsRecording(false);
   };
 
   const selectPatrol = (id: string) => {
@@ -508,6 +553,110 @@ export default function MpRobotDetail({ robotId, navigate, goBack }: Props) {
                   </button>
                 ))}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* 语音播报底部抽屉弹窗 */}
+        {showVoicePanel && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+            {/* 遮罩层 */}
+            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.65)' }} onClick={() => { setShowVoicePanel(false); stopRecording(); }} />
+            {/* 抽屉面板 */}
+            <div style={{ position: 'relative', background: '#0f172a', borderRadius: '20px 20px 0 0', border: '1px solid rgba(56,189,248,0.2)', padding: '0 0 24px', maxHeight: '80vh', overflowY: 'auto' }}>
+              {/* 拉手 */}
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 4px' }}>
+                <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.15)' }} />
+              </div>
+              {/* 标题栏 */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 16px 12px' }}>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: '#f0f9ff' }}>📢 语音播报</div>
+                  <div style={{ fontSize: 10, color: '#38bdf8', marginTop: 2 }}>{robot.name} · {robot.location}</div>
+                </div>
+                <button onClick={() => { setShowVoicePanel(false); stopRecording(); }} style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: '#94a3b8', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+              </div>
+
+              {/* 预设常用语 */}
+              <div style={{ padding: '0 16px 12px' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#475569', marginBottom: 8, letterSpacing: 1 }}>常用语快选</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {[
+                    { label: '请注意安全，禁止在此区域内奔跑', icon: '⚠️' },
+                    { label: '请出示您的证件，谢谢配合', icon: '🏢' },
+                    { label: '此区域正在巡逻，请勿尞小安全规定', icon: '🔍' },
+                    { label: '请注意车辆速度，限速5公里', icon: '🚗' },
+                    { label: '发现可疑情况请立即联系保安人员', icon: '📡' },
+                    { label: '请勿在此干扰正常工作，请尽快离开', icon: '🚫' },
+                    { label: '欢迎来访，请到前台登记后再进入', icon: '👋' },
+                    { label: '请注意防火安全，禁止在此吸烟', icon: '🚬' },
+                  ].map((item, i) => (
+                    <button key={i} onClick={() => { setVoiceText(item.label); }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 12, border: voiceText === item.label ? '1px solid rgba(56,189,248,0.5)' : '1px solid rgba(255,255,255,0.07)', background: voiceText === item.label ? 'rgba(56,189,248,0.1)' : 'rgba(255,255,255,0.03)', cursor: 'pointer', textAlign: 'left' as const }}>
+                      <span style={{ fontSize: 16, flexShrink: 0 }}>{item.icon}</span>
+                      <span style={{ fontSize: 12, color: voiceText === item.label ? '#38bdf8' : '#94a3b8', lineHeight: 1.4 }}>{item.label}</span>
+                      {voiceText === item.label && <span style={{ marginLeft: 'auto', fontSize: 12, color: '#38bdf8', flexShrink: 0 }}>✓</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 手动输入区 */}
+              <div style={{ padding: '0 16px 12px' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#475569', marginBottom: 8, letterSpacing: 1 }}>手动输入</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <textarea
+                    value={voiceText}
+                    onChange={e => setVoiceText(e.target.value)}
+                    placeholder="输入要播报的内容…"
+                    rows={2}
+                    style={{ flex: 1, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(56,189,248,0.25)', borderRadius: 12, padding: '10px 12px', color: '#e2e8f0', fontSize: 13, resize: 'none', outline: 'none', fontFamily: 'inherit', lineHeight: 1.5 }}
+                  />
+                  {/* 长按录音按钮 */}
+                  <button
+                    onMouseDown={startRecording}
+                    onMouseUp={stopRecording}
+                    onTouchStart={e => { e.preventDefault(); startRecording(); }}
+                    onTouchEnd={e => { e.preventDefault(); stopRecording(); }}
+                    style={{ width: 52, borderRadius: 12, border: `1.5px solid ${isRecording ? 'rgba(239,68,68,0.6)' : 'rgba(56,189,248,0.3)'}`, background: isRecording ? 'rgba(239,68,68,0.15)' : 'rgba(56,189,248,0.08)', color: isRecording ? '#ef4444' : '#38bdf8', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, flexShrink: 0, transition: 'all 0.15s' }}>
+                    <span style={{ fontSize: isRecording ? 22 : 20 }}>{isRecording ? '🔴' : '🎤'}</span>
+                    <span style={{ fontSize: 9, fontWeight: 700 }}>{isRecording ? '松开' : '长按'}</span>
+                  </button>
+                </div>
+                {isRecording && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, padding: '6px 10px', borderRadius: 8, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', animation: 'pulse 1s infinite', display: 'inline-block' }} />
+                    <span style={{ fontSize: 11, color: '#ef4444' }}>正在监听语音输入…松开即停止</span>
+                  </div>
+                )}
+              </div>
+
+              {/* 发送按钮 */}
+              <div style={{ padding: '0 16px 8px' }}>
+                <button
+                  onClick={() => sendVoice(voiceText)}
+                  disabled={!voiceText.trim()}
+                  style={{ width: '100%', padding: '13px 0', borderRadius: 14, border: 'none', background: voiceText.trim() ? 'linear-gradient(135deg,#0ea5e9,#6366f1)' : 'rgba(255,255,255,0.05)', color: voiceText.trim() ? '#fff' : '#475569', fontSize: 15, fontWeight: 800, cursor: voiceText.trim() ? 'pointer' : 'not-allowed', letterSpacing: 1, transition: 'all 0.2s' }}
+                >
+                  📢 立即播报
+                </button>
+              </div>
+
+              {/* 播报历史 */}
+              {voiceLog.length > 0 && (
+                <div style={{ padding: '0 16px' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#334155', marginBottom: 6, letterSpacing: 1 }}>近期播报记录</div>
+                  {voiceLog.map((log, i) => (
+                    <div key={i} onClick={() => setVoiceText(log.text)} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '7px 0', borderBottom: i < voiceLog.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', cursor: 'pointer' }}>
+                      <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>📣</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.4 }}>{log.text}</div>
+                        <div style={{ fontSize: 9, color: '#334155', marginTop: 2 }}>{log.time}</div>
+                      </div>
+                      <span style={{ fontSize: 9, color: '#334155', flexShrink: 0, marginTop: 2 }}>再次播报</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
